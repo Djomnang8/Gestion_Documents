@@ -649,3 +649,4 @@ C:\TP_PROJET_B1_a_B3\projet_Angular\gestion_documents_C_sharp\backend\GestionDoc
 C:\TP_PROJET_B1_a_B3\projet_Angular\gestion_documents_C_sharp\backend\GestionDocuments.API\obj\Debug\net8.0\GestionDocuments.API.pdb
 C:\TP_PROJET_B1_a_B3\projet_Angular\gestion_documents_C_sharp\backend\GestionDocuments.API\obj\Debug\net8.0\GestionDocuments.API.genruntimeconfig.cache
 C:\TP_PROJET_B1_a_B3\projet_Angular\gestion_documents_C_sharp\backend\GestionDocuments.API\obj\Debug\net8.0\ref\GestionDocuments.API.dll
+C:\TP_PROJET_B1_a_B3\projet_Angular\gestion_documents_C_sharp\backend\GestionDocuments.API\obj\Debug\net8.0\GestionDocuments.API.sourcelink.json

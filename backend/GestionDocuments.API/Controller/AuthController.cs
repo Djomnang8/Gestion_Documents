@@ -21,7 +21,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req)
     {
-        // 1. Trouver l'utilisateur par email
+        // 1. Trouver l'utilisateur par email (pas besoin d'inclure Service)
         var utilisateur = await _db.Utilisateurs
             .Include(u => u.UtilisateursRoles)
                 .ThenInclude(ur => ur.Role)
@@ -52,10 +52,18 @@ public class AuthController : ControllerBase
             .Distinct()
             .ToList();
 
-        // 4. Générer le token JWT
-        var token = GenererToken(utilisateur, role?.Nom ?? "", permissions);
+        // 4. Récupérer le nom du service (si l'agent est rattaché à un service)
+        string serviceNom = "";
+        if (utilisateur.ServiceId.HasValue)
+        {
+            var service = await _db.Services.FindAsync(utilisateur.ServiceId.Value);
+            serviceNom = service?.Nom ?? "";
+        }
 
-        // 5. Mettre à jour la dernière connexion
+        // 5. Générer le token JWT
+        var token = GenererToken(utilisateur, role?.Nom ?? "", permissions, serviceNom);
+
+        // 6. Mettre à jour la dernière connexion
         utilisateur.DerniereConnexion = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -70,12 +78,13 @@ public class AuthController : ControllerBase
                 Email = utilisateur.Email,
                 Role = role?.Nom ?? "",
                 Permissions = permissions,
-                ServiceId = utilisateur.ServiceId
+                ServiceId = utilisateur.ServiceId,
+                ServiceNom = serviceNom // ← ajout
             }
         });
     }
 
-    private string GenererToken(Utilisateur user, string role, List<string> permissions)
+    private string GenererToken(Utilisateur user, string role, List<string> permissions, string serviceNom)
     {
         var jwt = _config.GetSection("JwtSettings");
         var key = new SymmetricSecurityKey(
@@ -88,7 +97,8 @@ public class AuthController : ControllerBase
             new("nom", user.Nom),
             new("prenom", user.Prenom),
             new("role", role),
-            new("serviceId", user.ServiceId?.ToString() ?? "")
+            new("serviceId", user.ServiceId?.ToString() ?? ""),
+            new("serviceNom", serviceNom)   // ← nouvelle claim
         };
 
         // Ajouter chaque permission comme claim
@@ -127,4 +137,5 @@ public class UserDto
     public string Role { get; set; } = "";
     public List<string> Permissions { get; set; } = [];
     public int? ServiceId { get; set; }
+    public string ServiceNom { get; set; } = "";  // ← ajout
 }

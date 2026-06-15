@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj": {}
+    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj": {}
   },
   "projects": {
-    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj": {
+    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
+        "projectUniqueName": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
         "projectName": "GestionDocuments.Tests",
-        "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
+        "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
         "packagesPath": "C:\\Users\\joyce\\.nuget\\packages\\",
-        "outputPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents\\backend\\GestionDocuments.Tests\\obj\\",
+        "outputPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -83,7 +83,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.313/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

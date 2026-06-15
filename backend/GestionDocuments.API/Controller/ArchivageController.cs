@@ -18,30 +18,6 @@ public class ArchivageController : ControllerBase
         _logger = logger;
     }
 
-    // ─── Helper : notification aux archivistes ──────────────────────────────
-    private async Task NotifierArchivistes(string titre, string message, string type, Guid? dossierId = null, string? numeroDossier = null)
-    {
-        var archivistes = await _db.Utilisateurs
-            .Where(u => u.TypeUtilisateur == "Archiviste" && u.EstActif && !u.EstListeNoire && !u.EstSupprime)
-            .Select(u => u.Id)
-            .ToListAsync();
-
-        foreach (var archId in archivistes)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                UtilisateurId = archId,
-                Titre = titre,
-                Message = message,
-                Type = type,
-                DossierId = dossierId,
-                NumeroDossier = numeroDossier,
-                DateCreation = DateTime.UtcNow
-            });
-        }
-        await _db.SaveChangesAsync();
-    }
-
     // ─── GET /api/archivage/kpi ─────────────────────────────────────────────
     [HttpGet("kpi")]
     public async Task<IActionResult> GetKpi()
@@ -49,14 +25,10 @@ public class ArchivageController : ControllerBase
         var aujourd = DateTime.UtcNow.Date;
         var debutMois = new DateTime(aujourd.Year, aujourd.Month, 1);
 
-        var aArchiver = await _db.Dossiers
-            .CountAsync(d => d.Statut.Code == "TERMINE");
-
+        var aArchiver = await _db.Dossiers.CountAsync(d => d.Statut.Code == "TERMINE");
         var archivesCeMois = await _db.Dossiers
             .CountAsync(d => d.Statut.Code == "ARCHIVE" && d.DateArchivage != null && d.DateArchivage.Value >= debutMois);
-
-        var totalArchives = await _db.Dossiers
-            .CountAsync(d => d.Statut.Code == "ARCHIVE");
+        var totalArchives = await _db.Dossiers.CountAsync(d => d.Statut.Code == "ARCHIVE");
 
         return Ok(new { aArchiver, archivesCeMois, totalArchives });
     }
@@ -85,7 +57,9 @@ public class ArchivageController : ControllerBase
         return Ok(dossiers);
     }
 
-    // ─── POST /api/archivage/{dossierId} (avec notification archiviste) ────
+    // ─── POST /api/archivage/{dossierId} ────────────────────────────────────
+    // Identifie le même citoyen par NomCitoyen + EmailCitoyen + ServiceId
+    // Crée une nouvelle version d'archive si le citoyen a déjà des archives pour ce service
     [HttpPost("{dossierId:guid}")]
     public async Task<IActionResult> ArchiverDossier(Guid dossierId)
     {
@@ -104,112 +78,264 @@ public class ArchivageController : ControllerBase
         if (statutArchive == null)
             return BadRequest(new { error = "Statut 'ARCHIVE' non défini." });
 
-        // ── Fusion si même email ───────────────────────────────────────────
-        Dossier? dossierCible = null;
-        if (!string.IsNullOrEmpty(dossier.EmailCitoyen))
-        {
-            dossierCible = await _db.Dossiers
-                .Include(d => d.Statut)
-                .Where(d => d.EmailCitoyen == dossier.EmailCitoyen
-                         && d.Statut.Code == "ARCHIVE"
-                         && d.Id != dossierId)
-                .OrderByDescending(d => d.DateArchivage)
-                .FirstOrDefaultAsync();
-        }
+        // Recherche des archives existantes du même citoyen (nom+email) pour le même service
+        var archivesExistantes = await _db.Dossiers
+            .Where(d => d.NomCitoyen == dossier.NomCitoyen
+                     && d.EmailCitoyen == dossier.EmailCitoyen
+                     && d.ServiceId == dossier.ServiceId
+                     && d.Statut.Code == "ARCHIVE"
+                     && d.Id != dossierId)
+            .OrderBy(d => d.NumeroVersionArchive)
+            .ToListAsync();
 
-        if (dossierCible != null)
+        Guid groupeId;
+        int nouvelleVersion;
+
+        if (archivesExistantes.Any())
         {
-            // Fusion : rattacher les versions au dossier archivé existant
-            foreach (var version in dossier.VersionsDocument)
+            // Même citoyen + même service : nouvelle version d'archive
+            // Récupérer ou créer le GroupeArchiveId
+            groupeId = archivesExistantes.FirstOrDefault(d => d.GroupeArchiveId != null)?.GroupeArchiveId
+                       ?? Guid.NewGuid();
+
+            // Attribuer le groupeId aux archives sans groupe et corriger les numéros de version
+            int versionBase = 1;
+            foreach (var arch in archivesExistantes.OrderBy(d => d.DateArchivage ?? d.DateMiseAJourStatut))
             {
-                version.DossierId = dossierCible.Id;
+                arch.GroupeArchiveId = groupeId;
+                if (arch.NumeroVersionArchive == 0)
+                    arch.NumeroVersionArchive = versionBase++;
+                arch.EstVersionActive = false;  // La nouvelle version sera active
             }
 
-            var statutTermine = await _db.StatutsDossier.FirstOrDefaultAsync(s => s.Code == "TERMINE");
-            if (statutTermine != null)
-                dossier.StatutId = statutTermine.Id;
-
-            await _db.SaveChangesAsync();
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId != null && Guid.TryParse(userId, out var gId))
-            {
-                _db.Journaux.Add(new Journal
-                {
-                    UtilisateurId = gId,
-                    Module = "Archivage",
-                    Action = "ARCHIVAGE_FUSION",
-                    Details = $"Dossier {dossier.Numero} fusionné dans {dossierCible.Numero} (même email : {dossier.EmailCitoyen})",
-                    DateAction = DateTime.UtcNow,
-                    NiveauId = 1
-                });
-                await _db.SaveChangesAsync();
-            }
-
-            // Notification aux archivistes (fusion)
-            await NotifierArchivistes(
-                "Fusion d'archives",
-                $"Le dossier {dossier.Numero} a été fusionné avec l'archive existante {dossierCible.Numero} (même citoyen).",
-                "ARCHIVAGE",
-                dossierCible.Id,
-                dossierCible.Numero
-            );
-
-            return Ok(new
-            {
-                message = $"Dossier fusionné dans l'archive existante {dossierCible.Numero}.",
-                fusionne = true,
-                dossierId = dossierCible.Id
-            });
+            var maxVersion = archivesExistantes.Max(d => d.NumeroVersionArchive);
+            nouvelleVersion = maxVersion + 1;
+        }
+        else
+        {
+            // Premier archivage pour ce citoyen + service
+            groupeId = Guid.NewGuid();
+            nouvelleVersion = 1;
         }
 
-        // ── Archivage normal (premier dossier de cet email) ─────────────────
         var ancienStatutId = dossier.StatutId;
-
         dossier.StatutId = statutArchive.Id;
         dossier.DateArchivage = DateTime.UtcNow;
         dossier.DateMiseAJourStatut = DateTime.UtcNow;
+        dossier.GroupeArchiveId = groupeId;
+        dossier.NumeroVersionArchive = nouvelleVersion;
+        dossier.EstVersionActive = true;
 
         _db.HistoriqueStatuts.Add(new HistoriqueStatut
         {
             DossierId = dossier.Id,
             AncienStatutId = ancienStatutId,
             NouveauStatutId = statutArchive.Id,
-            Commentaire = "Archivage définitif",
+            Commentaire = $"Archivé — Version {nouvelleVersion}",
             DateChangement = DateTime.UtcNow,
-            AgentId = User.FindFirstValue(ClaimTypes.NameIdentifier) != null ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!) : null
+            AgentId = ParseUserId(User)
         });
 
         await _db.SaveChangesAsync();
 
-        var userIdNormal = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userIdNormal != null && Guid.TryParse(userIdNormal, out var gIdNormal))
+        var userId = ParseUserId(User);
+        if (userId.HasValue)
         {
             _db.Journaux.Add(new Journal
             {
-                UtilisateurId = gIdNormal,
+                UtilisateurId = userId.Value,
                 Module = "Archivage",
-                Action = "ARCHIVAGE_NOUVEAU",
-                Details = $"Dossier {dossier.Numero} archivé (premier dossier pour {dossier.EmailCitoyen})",
+                Action = "ARCHIVAGE",
+                Details = $"Dossier {dossier.Numero} archivé — Version {nouvelleVersion} (citoyen: {dossier.NomCitoyen}, email: {dossier.EmailCitoyen})",
                 DateAction = DateTime.UtcNow,
                 NiveauId = 1
             });
             await _db.SaveChangesAsync();
         }
 
-        // Notification aux archivistes
-        await NotifierArchivistes(
-            "Nouvelle archive",
-            $"Le dossier {dossier.Numero} a été archivé.",
-            "ARCHIVAGE",
-            dossier.Id,
-            dossier.Numero
-        );
-
-        return Ok(new { message = $"Dossier {dossier.Numero} archivé avec succès.", fusionne = false });
+        return Ok(new
+        {
+            message = $"Dossier {dossier.Numero} archivé en Version {nouvelleVersion}.",
+            numeroVersion = nouvelleVersion,
+            groupeArchiveId = groupeId
+        });
     }
 
-    // ─── GET /api/archivage/archives ────────────────────────────────────────
+    // ─── POST /api/archivage/{dossierId}/restaurer-version ──────────────────
+    // Rend une version archivée active → ses fichiers apparaissent dans Archives Consultables
+    [HttpPost("{dossierId:guid}/restaurer-version")]
+    public async Task<IActionResult> RestaurerVersion(Guid dossierId)
+    {
+        var dossier = await _db.Dossiers
+            .Include(d => d.Statut)
+            .FirstOrDefaultAsync(d => d.Id == dossierId);
+
+        if (dossier == null)
+            return NotFound(new { error = "Dossier introuvable." });
+
+        if (dossier.Statut.Code != "ARCHIVE")
+            return BadRequest(new { error = "Ce dossier n'est pas archivé." });
+
+        if (dossier.EstVersionActive)
+            return BadRequest(new { error = "Cette version est déjà la version active." });
+
+        if (dossier.GroupeArchiveId == null)
+            return BadRequest(new { error = "Ce dossier n'appartient à aucun groupe d'archive." });
+
+        // Désactiver toutes les versions du groupe
+        var groupeId = dossier.GroupeArchiveId.Value;
+        var tousLesDossiers = await _db.Dossiers
+            .Where(d => d.GroupeArchiveId == groupeId)
+            .ToListAsync();
+
+        foreach (var d in tousLesDossiers)
+            d.EstVersionActive = false;
+
+        // Activer la version choisie
+        dossier.EstVersionActive = true;
+        await _db.SaveChangesAsync();
+
+        var userId = ParseUserId(User);
+        if (userId.HasValue)
+        {
+            _db.Journaux.Add(new Journal
+            {
+                UtilisateurId = userId.Value,
+                Module = "Archivage",
+                Action = "RESTAURATION_VERSION_ARCHIVE",
+                Details = $"Version {dossier.NumeroVersionArchive} ({dossier.Numero}) restaurée comme version active du groupe {groupeId}",
+                DateAction = DateTime.UtcNow,
+                NiveauId = 1
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new { message = $"Version {dossier.NumeroVersionArchive} restaurée avec succès. Ses fichiers sont maintenant visibles dans Archives Consultables." });
+    }
+
+    // ─── GET /api/archivage/historique-versions ─────────────────────────────
+    // Retourne tous les dossiers archivés groupés : service → citoyen → versions
+    // Chaque version contient ses fichiers (VersionDocument)
+    [HttpGet("historique-versions")]
+    public async Task<IActionResult> GetHistoriqueVersions()
+    {
+        var dossiers = await _db.Dossiers
+            .Include(d => d.Service)
+            .Include(d => d.VersionsDocument)
+            .Where(d => d.Statut.Code == "ARCHIVE")
+            .OrderBy(d => d.Service.Nom)
+            .ThenBy(d => d.NomCitoyen)
+            .ThenBy(d => d.NumeroVersionArchive)
+            .ToListAsync();
+
+        var groupes = dossiers
+            .GroupBy(d => d.Service?.Nom ?? "Sans service")
+            .OrderBy(g => g.Key)
+            .Select(gService => new
+            {
+                nomService = gService.Key,
+                citoyens = gService
+                    .GroupBy(d => new { Nom = d.NomCitoyen, Email = d.EmailCitoyen ?? "" })
+                    .OrderBy(g => g.Key.Nom)
+                    .Select(gCitoyen => new
+                    {
+                        nomCitoyen = gCitoyen.Key.Nom,
+                        emailCitoyen = gCitoyen.Key.Email,
+                        groupeArchiveId = gCitoyen.FirstOrDefault(d => d.GroupeArchiveId != null)?.GroupeArchiveId,
+                        versions = gCitoyen
+                            .OrderBy(d => d.NumeroVersionArchive)
+                            .Select(d => new
+                            {
+                                numero = d.NumeroVersionArchive > 0 ? d.NumeroVersionArchive : 1,
+                                dossierId = d.Id,
+                                dossierNumero = d.Numero,
+                                dossierTitre = d.Titre,
+                                dateArchivage = d.DateArchivage ?? d.DateMiseAJourStatut,
+                                estActive = d.EstVersionActive,
+                                fichiers = d.VersionsDocument
+                                    .Select(v => new
+                                    {
+                                        id = v.Id,
+                                        nomFichier = v.NomFichier,
+                                        cheminFichier = v.CheminFichier,
+                                        typeFichier = v.TypeFichier ?? "",
+                                        tailleFichier = v.TailleFichier ?? 0L
+                                    }).ToList()
+                            }).ToList()
+                    }).ToList()
+            }).ToList();
+
+        return Ok(groupes);
+    }
+
+    // ─── GET /api/archivage/archives-consultables ───────────────────────────
+    // Retourne seulement les versions actives, groupées : service → citoyen
+    // Avec les fichiers de la version active pour consultation
+    [HttpGet("archives-consultables")]
+    public async Task<IActionResult> GetArchivesConsultables()
+    {
+        // Dossiers archivés avec version active
+        var dossiersActifs = await _db.Dossiers
+            .Include(d => d.Service)
+            .Include(d => d.VersionsDocument)
+            .Where(d => d.Statut.Code == "ARCHIVE" && d.EstVersionActive)
+            .OrderBy(d => d.Service.Nom)
+            .ThenBy(d => d.NomCitoyen)
+            .ToListAsync();
+
+        // Dossiers archivés sans GroupeArchiveId (archives legacy)
+        var dossiersLegacy = await _db.Dossiers
+            .Include(d => d.Service)
+            .Include(d => d.VersionsDocument)
+            .Where(d => d.Statut.Code == "ARCHIVE" && d.GroupeArchiveId == null)
+            .OrderBy(d => d.Service.Nom)
+            .ThenBy(d => d.NomCitoyen)
+            .ToListAsync();
+
+        var tousLesDossiers = dossiersActifs
+            .Concat(dossiersLegacy.Where(leg => !dossiersActifs.Any(a => a.Id == leg.Id)))
+            .OrderBy(d => d.Service?.Nom ?? "")
+            .ThenBy(d => d.NomCitoyen)
+            .ToList();
+
+        var groupes = tousLesDossiers
+            .GroupBy(d => d.Service?.Nom ?? "Sans service")
+            .OrderBy(g => g.Key)
+            .Select(gService => new
+            {
+                nomService = gService.Key,
+                citoyens = gService
+                    .GroupBy(d => new { Nom = d.NomCitoyen, Email = d.EmailCitoyen ?? "" })
+                    .OrderBy(g => g.Key.Nom)
+                    .Select(gCitoyen =>
+                    {
+                        var dossier = gCitoyen.OrderByDescending(d => d.NumeroVersionArchive).First();
+                        return new
+                        {
+                            nomCitoyen = gCitoyen.Key.Nom,
+                            emailCitoyen = gCitoyen.Key.Email,
+                            groupeArchiveId = dossier.GroupeArchiveId,
+                            dossierId = dossier.Id,
+                            dossierNumero = dossier.Numero,
+                            dossierTitre = dossier.Titre,
+                            dateArchivage = dossier.DateArchivage ?? dossier.DateMiseAJourStatut,
+                            numeroVersionActive = dossier.NumeroVersionArchive > 0 ? dossier.NumeroVersionArchive : 1,
+                            fichiers = dossier.VersionsDocument.Select(v => new
+                            {
+                                id = v.Id,
+                                nomFichier = v.NomFichier,
+                                cheminFichier = v.CheminFichier,
+                                typeFichier = v.TypeFichier ?? "",
+                                tailleFichier = v.TailleFichier ?? 0L
+                            }).ToList()
+                        };
+                    }).ToList()
+            }).ToList();
+
+        return Ok(groupes);
+    }
+
+    // ─── GET /api/archivage/archives (compatibilité) ─────────────────────────
     [HttpGet("archives")]
     public async Task<IActionResult> RechercherArchives(
         [FromQuery] string? numero,
@@ -225,7 +351,7 @@ public class ArchivageController : ControllerBase
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(numero))
-            query = query.Where(d => d.Numero.Contains(numero));
+            query = query.Where(d => d.Numero.Contains(numero) || d.NomCitoyen.Contains(numero));
         if (serviceId.HasValue)
             query = query.Where(d => d.ServiceId == serviceId.Value);
         if (dateDebut.HasValue)
@@ -253,9 +379,16 @@ public class ArchivageController : ControllerBase
 
         return Ok(new { data = archives, total });
     }
+
+    private static Guid? ParseUserId(System.Security.Principal.IPrincipal user)
+    {
+        var str = (user as System.Security.Claims.ClaimsPrincipal)
+            ?.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        return Guid.TryParse(str, out var g) ? g : null;
+    }
 }
 
-// DTOs
+// ─── DTOs ────────────────────────────────────────────────────────────────────
 public class DossierAArchiverDto
 {
     public Guid Id { get; set; }

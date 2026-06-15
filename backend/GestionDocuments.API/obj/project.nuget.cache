@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "pet1kyGjzkU=",
+  "dgSpecHash": "MZisk6Bh72c=",
   "success": true,
-  "projectFilePath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
+  "projectFilePath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\joyce\\.nuget\\packages\\automapper\\12.0.1\\automapper.12.0.1.nupkg.sha512",
     "C:\\Users\\joyce\\.nuget\\packages\\automapper.extensions.microsoft.dependencyinjection\\12.0.1\\automapper.extensions.microsoft.dependencyinjection.12.0.1.nupkg.sha512",
@@ -144,16 +144,13 @@
   ],
   "logs": [
     {
-      "code": "NU1902",
+      "code": "NU1900",
       "level": "Warning",
-      "message": "Le package 'MailKit' 4.15.1 présente une vulnérabilité de gravité moyenne connue, https://github.com/advisories/GHSA-9j88-vvj5-vhgr.",
-      "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
+      "message": "Une erreur s’est produite lors de l’obtention des données de vulnérabilité du package\u00A0: Impossible de charger l'index de service pour la source https://api.nuget.org/v3/index.json.",
+      "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
       "warningLevel": 1,
-      "filePath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
-      "libraryId": "MailKit",
-      "targetGraphs": [
-        "net8.0"
-      ]
+      "filePath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
+      "targetGraphs": []
     }
   ]
 }

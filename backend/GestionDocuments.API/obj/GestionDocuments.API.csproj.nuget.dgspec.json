@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj": {}
+    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj": {}
   },
   "projects": {
-    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj": {
+    "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
+        "projectUniqueName": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
         "projectName": "GestionDocuments.API",
-        "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
+        "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\GestionDocuments.API.csproj",
         "packagesPath": "C:\\Users\\joyce\\.nuget\\packages\\",
-        "outputPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.API\\obj\\",
+        "outputPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.API\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

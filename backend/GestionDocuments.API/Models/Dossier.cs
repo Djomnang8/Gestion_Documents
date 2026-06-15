@@ -16,13 +16,15 @@ public class Dossier
     public DateTime DateMiseAJourStatut { get; set; } = DateTime.UtcNow;
     public DateTime? DateArchivage { get; set; }
     public Guid? AgentId { get; set; }
-   
-    
+
+    // Versionnement des archives : même citoyen (nom+email) + même service = nouvelles versions
+    public Guid? GroupeArchiveId { get; set; }
+    public int NumeroVersionArchive { get; set; } = 0;
+    public bool EstVersionActive { get; set; } = false;
+
     public Utilisateur? Agent { get; set; }
     public ICollection<HistoriqueStatut> HistoriqueStatuts { get; set; } = [];
     public ICollection<VersionDocument> VersionsDocument { get; set; } = [];
-
-   
 
     public int ServiceId { get; set; }
     [ForeignKey(nameof(ServiceId))]

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text;
 using GestionDocuments.API.Models;
+using GestionDocuments.API.Services;
 
 [ApiController]
 [Route("api/dossiers")]
@@ -15,19 +16,22 @@ public class DossiersController : ControllerBase
     private readonly ILogger<DossiersController> _logger;
     private readonly IWebHostEnvironment _env;
     private readonly IEmailService _emailService;
+    private readonly IFileOrganizationService _fileOrgService;
 
     public DossiersController(ApplicationDbContext db,
                               ILogger<DossiersController> logger,
                               IWebHostEnvironment env,
-                              IEmailService emailService)
+                              IEmailService emailService,
+                              IFileOrganizationService fileOrgService)
     {
         _db = db;
         _logger = logger;
         _env = env;
         _emailService = emailService;
+        _fileOrgService = fileOrgService;
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ─── Helper ──────────────────────────────────────────────────────────────
     private async Task<int?> GetServiceIdAgentConnecte()
     {
         var role = User.FindFirstValue("role") ?? "";
@@ -38,29 +42,6 @@ public class DossiersController : ControllerBase
 
         var utilisateur = await _db.Utilisateurs.FindAsync(userId);
         return utilisateur?.ServiceId;
-    }
-
-    private async Task NotifierAgentsService(Dossier dossier, string titre, string message, string type)
-    {
-        var agents = await _db.Utilisateurs
-            .Where(u => u.ServiceId == dossier.ServiceId && u.EstActif && !u.EstListeNoire && !u.EstSupprime)
-            .Select(u => u.Id)
-            .ToListAsync();
-
-        foreach (var agentId in agents)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                UtilisateurId = agentId,
-                Titre = titre,
-                Message = message,
-                Type = type,
-                DossierId = dossier.Id,
-                NumeroDossier = dossier.Numero,
-                DateCreation = DateTime.UtcNow
-            });
-        }
-        await _db.SaveChangesAsync();
     }
 
     // ─── GET /api/dossiers ────────────────────────────────────────────────────
@@ -167,11 +148,11 @@ public class DossiersController : ControllerBase
         });
     }
 
-    // ─── GET /api/dossiers/en-retard (modifié : seulement EN_COURS) ──────────
+    // ─── GET /api/dossiers/en-retard ─────────────────────────────────────────
     [HttpGet("en-retard")]
     public async Task<IActionResult> GetEnRetard()
     {
-        var seuil = DateTime.UtcNow.AddDays(-1);
+        var seuil = DateTime.UtcNow.AddDays(-7);
         var serviceAgent = await GetServiceIdAgentConnecte();
 
         var query = _db.Dossiers
@@ -335,7 +316,7 @@ public class DossiersController : ControllerBase
         return Ok(new { id = dossier.Id, numero = dossier.Numero });
     }
 
-    // ─── PATCH /api/dossiers/{id}/statut (avec email rejet + notification) ────
+    // ─── PATCH /api/dossiers/{id}/statut ─────────────────────────────────────
     [HttpPatch("{id:guid}/statut")]
     public async Task<IActionResult> ChangerStatut(Guid id, [FromBody] ChangerStatutRequest req)
     {
@@ -360,7 +341,7 @@ public class DossiersController : ControllerBase
         {
             dossier.MotifRejet = req.Commentaire;
 
-            // ─── Envoi d'email au citoyen ─────────────────────────────
+            // Envoi email au citoyen
             if (!string.IsNullOrEmpty(dossier.EmailCitoyen))
             {
                 _ = Task.Run(async () =>
@@ -368,17 +349,13 @@ public class DossiersController : ControllerBase
                     try
                     {
                         string sujet = $"Votre dossier {dossier.Numero} a été rejeté";
-                        string corps = $@"
-                            <html>
-                            <body>
-                                <h2>Bonjour {dossier.NomCitoyen},</h2>
-                                <p>Nous regrettons de vous informer que votre dossier <strong>{dossier.Numero}</strong> a été rejeté.</p>
-                                <p><strong>Motif :</strong> {req.Commentaire}</p>
-                                <p>Vous pouvez soumettre un nouveau dossier en corrigeant les informations.</p>
-                                <br/>
-                                <p>Cordialement,<br/>Le service {dossier.Service?.Nom}</p>
-                            </body>
-                            </html>";
+                        string corps = $@"<html><body>
+                            <h2>Bonjour {dossier.NomCitoyen},</h2>
+                            <p>Nous regrettons de vous informer que votre dossier <strong>{dossier.Numero}</strong> a été rejeté.</p>
+                            <p><strong>Motif :</strong> {req.Commentaire}</p>
+                            <p>Vous pouvez soumettre un nouveau dossier en corrigeant les informations.</p>
+                            <br/><p>Cordialement,<br/>Le service {dossier.Service?.Nom}</p>
+                        </body></html>";
                         await _emailService.SendEmailAsync(dossier.EmailCitoyen, sujet, corps);
                     }
                     catch (Exception ex)
@@ -407,34 +384,37 @@ public class DossiersController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        // ─── Notification aux agents du service ─────────────────────
-        await NotifierAgentsService(dossier,
-            $"Changement de statut - {dossier.Numero}",
-            $"Le dossier {dossier.Numero} est passé à {nouveauStatut.Libelle}.",
-            "STATUT");
-
         return Ok(new { message = "Statut mis à jour.", statut = nouveauStatut.Libelle });
     }
 
-    // ─── POST /api/dossiers/{id}/documents ──────────────────────────────────
+    // ─── POST /api/dossiers/{id}/documents ───────────────────────────────────
     [HttpPost("{id:guid}/documents")]
     public async Task<IActionResult> UploadDocument(Guid id, IFormFile fichier)
     {
-        var dossier = await _db.Dossiers.FirstOrDefaultAsync(d => d.Id == id);
+        var dossier = await _db.Dossiers
+            .Include(d => d.Service)
+            .FirstOrDefaultAsync(d => d.Id == id);
+
         if (dossier == null) return NotFound(new { error = "Dossier introuvable." });
         if (fichier == null || fichier.Length == 0)
             return BadRequest(new { error = "Aucun fichier fourni." });
 
+        var uniqueId = Guid.NewGuid().ToString("N");
+        var nomFichier = $"{uniqueId}_{fichier.FileName}";
+
+        var dossierFinalPath = _fileOrgService.GetCitizenFolderPath(
+            dossier.NomCitoyen,
+            dossier.EmailCitoyen ?? "",
+            dossier.ServiceId,
+            dossier.Service.Nom);
+
+        var cheminFinal = Path.Combine(dossierFinalPath, nomFichier);
+
+        await using (var stream = new FileStream(cheminFinal, FileMode.Create))
+            await fichier.CopyToAsync(stream);
+
         var derniereVersion = await _db.VersionsDocument
             .Where(v => v.DossierId == id).MaxAsync(v => (int?)v.NumeroVersion) ?? 0;
-
-        var nomFichier = $"{dossier.Numero}_{fichier.FileName}";
-        var dossierUpload = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "dossiers");
-        Directory.CreateDirectory(dossierUpload);
-        var chemin = Path.Combine(dossierUpload, nomFichier);
-
-        using (var stream = new FileStream(chemin, FileMode.Create))
-            await fichier.CopyToAsync(stream);
 
         var agentIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
         Guid? agentId = Guid.TryParse(agentIdStr, out var g) ? g : null;
@@ -448,7 +428,7 @@ public class DossiersController : ControllerBase
             DossierId = id,
             NumeroVersion = derniereVersion + 1,
             NomFichier = fichier.FileName,
-            CheminFichier = chemin,
+            CheminFichier = cheminFinal,
             TypeFichier = fichier.ContentType,
             TailleFichier = fichier.Length,
             DateCreation = DateTime.UtcNow,
@@ -496,8 +476,11 @@ public class DossiersController : ControllerBase
             _db.Dossiers.Add(dossier);
             await _db.SaveChangesAsync();
 
-            var uploadsFolder = Path.Combine(_env.ContentRootPath, "uploads", "dossiers");
-            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+            var folderPath = _fileOrgService.GetCitizenFolderPath(
+                dto.NomCitoyen,
+                dto.EmailCitoyen ?? "",
+                service.Id,
+                service.Nom);
 
             int version = 1;
             foreach (var fichier in fichiers)
@@ -506,8 +489,9 @@ public class DossiersController : ControllerBase
                 if (!allowedExtensions.Contains(ext)) continue;
                 if (fichier.Length > 10 * 1024 * 1024) continue;
 
-                var uniqueFileName = $"{dossier.Numero}_{Guid.NewGuid()}_{Path.GetFileName(fichier.FileName)}";
-                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                var uniqueId = Guid.NewGuid().ToString("N");
+                var nomFichier = $"{uniqueId}_{fichier.FileName}";
+                var filePath = Path.Combine(folderPath, nomFichier);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
                     await fichier.CopyToAsync(stream);
@@ -528,13 +512,14 @@ public class DossiersController : ControllerBase
 
             await _db.SaveChangesAsync();
 
+            // Email de confirmation au citoyen
             if (!string.IsNullOrEmpty(dossier.EmailCitoyen))
             {
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        string sujet = $"Confirmation de dépôt - Dossier {dossier.Numero}";
+                        string sujet = $"Confirmation de dépôt — Dossier {dossier.Numero}";
                         string corps = $@"<html><body>
                             <h2>Bonjour {dossier.NomCitoyen},</h2>
                             <p>Votre dossier a été déposé avec succès auprès du service <strong>{service.Nom}</strong>.</p>
@@ -634,12 +619,6 @@ public class DossiersController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        // Notification aux agents du service d'origine (et du nouveau ?)
-        await NotifierAgentsService(dossier,
-            $"Dossier transféré - {dossier.Numero}",
-            $"Le dossier {dossier.Numero} a été transféré vers le service {dto.ServiceId}.",
-            "STATUT");
-
         return Ok(new { message = "Dossier transféré avec succès." });
     }
 
@@ -690,7 +669,6 @@ public class DossiersController : ControllerBase
         return Ok(new { total, page, size, data = dossiers });
     }
 
-    // ─── Méthode utilitaire ───────────────────────────────────────────────────
     private async Task<string> GenererNumero()
     {
         var annee = DateTime.Now.Year;

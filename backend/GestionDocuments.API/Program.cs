@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using GestionDocuments.API.Models;
+using GestionDocuments.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions => sqlOptions.MigrationsHistoryTable("EFMigrationsHistory")));
+
+builder.Services.AddScoped<IFileOrganizationService, FileOrganizationService>();
 
 // Authentification JWT
 var jwt = builder.Configuration.GetSection("JwtSettings");
@@ -72,6 +76,7 @@ builder.Services.Configure<FormOptions>(o => {
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+builder.Services.AddScoped<IFileOrganizationService, FileOrganizationService>();
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

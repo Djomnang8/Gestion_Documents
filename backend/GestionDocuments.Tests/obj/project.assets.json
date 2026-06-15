@@ -949,11 +949,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
+      "projectUniqueName": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
       "projectName": "GestionDocuments.Tests",
-      "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
+      "projectPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
       "packagesPath": "C:\\Users\\joyce\\.nuget\\packages\\",
-      "outputPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\obj\\",
+      "outputPath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.Tests\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

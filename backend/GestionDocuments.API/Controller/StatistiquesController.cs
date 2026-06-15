@@ -43,33 +43,21 @@ public class StatistiquesController : ControllerBase
         var (depuis, jusqu) = CalculerPlage(periode, dateDebut, dateFin);
         var precedent = depuis.AddDays(-(jusqu - depuis).TotalDays);
 
-        // Exclure systématiquement les dossiers ARCHIVÉS pour l'Agent
         var query = _db.Dossiers.Include(d => d.Statut)
                                 .Where(d => d.Statut.Code != "ARCHIVE")
                                 .AsQueryable();
         if (serviceId.HasValue) query = query.Where(d => d.ServiceId == serviceId.Value);
 
-        var courant   = await query.Where(d => d.DateDepot >= depuis  && d.DateDepot <= jusqu).ToListAsync();
+        var courant    = await query.Where(d => d.DateDepot >= depuis    && d.DateDepot <= jusqu).ToListAsync();
         var precedents = await query.Where(d => d.DateDepot >= precedent && d.DateDepot < depuis).ToListAsync();
 
         int total    = courant.Count;
         int totalPr  = precedents.Count;
         int termines = courant.Count(d => d.Statut?.Code == "TERMINE");
         int terminPr = precedents.Count(d => d.Statut?.Code == "TERMINE");
-        int rejetes  = courant.Count(d => d.Statut?.Code == "REJETE");
-        int rejetPr  = precedents.Count(d => d.Statut?.Code == "REJETE");
 
-        double delai   = courant.Where(d => d.Statut?.Code == "TERMINE")
-                                .Select(d => (DateTime.UtcNow - d.DateDepot).TotalDays)
-                                .DefaultIfEmpty(0).Average();
-        double delaiPr = precedents.Where(d => d.Statut?.Code == "TERMINE")
-                                   .Select(d => (DateTime.UtcNow - d.DateDepot).TotalDays)
-                                   .DefaultIfEmpty(0).Average();
-
-        double tTrait  = total > 0 ? Math.Round((double)termines / total * 100, 1) : 0;
+        double tTrait  = total   > 0 ? Math.Round((double)termines / total   * 100, 1) : 0;
         double tTraitP = totalPr > 0 ? Math.Round((double)terminPr / totalPr * 100, 1) : 0;
-        double tRejet  = total > 0 ? Math.Round((double)rejetes / total * 100, 1) : 0;
-        double tRejetP = totalPr > 0 ? Math.Round((double)rejetPr / totalPr * 100, 1) : 0;
 
         var parStatut = courant
             .GroupBy(d => new { d.Statut?.Code, d.Statut?.Libelle })
@@ -82,18 +70,6 @@ public class StatistiquesController : ControllerBase
             .Select(g => new { service = g.Key, count = g.Count() })
             .ToListAsync();
 
-        var delaiParMois = Enumerable.Range(0, 12)
-            .Select(i => DateTime.UtcNow.AddMonths(-11 + i))
-            .Select(mois => new
-            {
-                mois  = mois.ToString("MMM yy"),
-                delai = Math.Round(
-                    courant.Where(d => d.DateDepot.Month == mois.Month && d.DateDepot.Year == mois.Year)
-                           .Select(d => (double)(DateTime.UtcNow - d.DateDepot).TotalDays)
-                           .DefaultIfEmpty(0).Average(), 1)
-            }).ToList();
-
-        // Évolution mensuelle : SANS statut ARCHIVE
         var evolutionMensuelle = Enumerable.Range(0, 12)
             .Select(i => DateTime.UtcNow.AddMonths(-11 + i))
             .Select(mois =>
@@ -101,26 +77,20 @@ public class StatistiquesController : ControllerBase
                 var m = courant.Where(d => d.DateDepot.Month == mois.Month && d.DateDepot.Year == mois.Year);
                 return new
                 {
-                    mois    = mois.ToString("MMM yy"),
-                    recu    = m.Count(),
-                    traite  = m.Count(d => d.Statut?.Code == "TERMINE"),
-                    rejete  = m.Count(d => d.Statut?.Code == "REJETE")
+                    mois   = mois.ToString("MMM yy"),
+                    recu   = m.Count(),
+                    traite = m.Count(d => d.Statut?.Code == "TERMINE")
                 };
             }).ToList();
 
         return Ok(new
         {
-            totalDossiers           = total,
-            tauxTraitement          = tTrait,
-            delaiMoyen              = Math.Round(delai, 1),
-            tauxRejet               = tRejet,
-            tendanceTotalDossiers   = Tendance(total, totalPr),
-            tendanceTauxTraitement  = Tendance(tTrait, tTraitP),
-            tendanceDelaiMoyen      = Tendance(delai, delaiPr),
-            tendanceTauxRejet       = Tendance(tRejet, tRejetP),
-            dossiersParStatut       = parStatut,
-            repartitionParService   = parService,
-            delaiParMois,
+            totalDossiers          = total,
+            tauxTraitement         = tTrait,
+            tendanceTotalDossiers  = Tendance(total, totalPr),
+            tendanceTauxTraitement = Tendance(tTrait, tTraitP),
+            dossiersParStatut      = parStatut,
+            repartitionParService  = parService,
             evolutionMensuelle
         });
     }
@@ -203,9 +173,7 @@ public async Task<IActionResult> ExporterPdf(
     var dossiers = await query.ToListAsync();
     int total    = dossiers.Count;
     int termines = dossiers.Count(d => d.Statut?.Code == "TERMINE");
-    int rejetes  = dossiers.Count(d => d.Statut?.Code == "REJETE");
     double tTrait = total > 0 ? Math.Round((double)termines / total * 100, 1) : 0;
-    double tRejet = total > 0 ? Math.Round((double)rejetes  / total * 100, 1) : 0;
 
     using var ms  = new System.IO.MemoryStream();
     var doc       = new Document(PageSize.A4, 40, 40, 60, 40);
@@ -220,11 +188,11 @@ public async Task<IActionResult> ExporterPdf(
     doc.Add(new Paragraph("Rapport de Statistiques Documentaires", fTitre));
     doc.Add(new Paragraph($"Période : {depuis:dd/MM/yyyy} — {jusqu:dd/MM/yyyy}", fSub));
     doc.Add(new Paragraph($"Généré le : {DateTime.Now:dd/MM/yyyy à HH:mm}", fSub));
-    doc.Add(new Paragraph(" "));   // ← remplace Chunk.NEWLINE
+    doc.Add(new Paragraph(" "));
 
-    // KPIs
-    var kpiTable = new PdfPTable(4) { WidthPercentage = 100 };
-    kpiTable.SetWidths(new float[] { 1,1,1,1 });
+    // KPIs (2 colonnes : total + taux de traitement)
+    var kpiTable = new PdfPTable(2) { WidthPercentage = 60 };
+    kpiTable.SetWidths(new float[] { 1, 1 });
 
     void AddKpi(string label, string val, string hex)
     {
@@ -233,15 +201,13 @@ public async Task<IActionResult> ExporterPdf(
         var b = Convert.ToInt32(hex[5..7], 16);
         var bg = new BaseColor(r,g,b);
         var c  = new PdfPCell { BackgroundColor = bg, Padding = 10, Border = 0 };
-        c.AddElement(new Paragraph(val, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 22, BaseColor.White)));   // White
-        c.AddElement(new Paragraph(label, FontFactory.GetFont(FontFactory.HELVETICA, 9, BaseColor.White)));        // White
+        c.AddElement(new Paragraph(val, FontFactory.GetFont(FontFactory.HELVETICA_BOLD, 22, BaseColor.White)));
+        c.AddElement(new Paragraph(label, FontFactory.GetFont(FontFactory.HELVETICA, 9, BaseColor.White)));
         kpiTable.AddCell(c);
     }
 
     AddKpi("Total dossiers",     total.ToString(),   "#1565C0");
-    AddKpi("Traités",            termines.ToString(), "#43A047");
-    AddKpi("Taux de traitement", $"{tTrait}%",       "#5E35B1");
-    AddKpi("Taux de rejet",      $"{tRejet}%",       "#E53935");
+    AddKpi("Taux de traitement", $"{tTrait}%",       "#43A047");
     doc.Add(kpiTable);
     doc.Add(new Paragraph(" "));   // ← remplace Chunk.NEWLINE
 

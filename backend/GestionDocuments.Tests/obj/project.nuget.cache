@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "Z07j2k+8Gd0=",
+  "dgSpecHash": "a8YGSl8+fSM=",
   "success": true,
-  "projectFilePath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\gestion_documents_C_sharp\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
+  "projectFilePath": "C:\\TP_PROJET_B1_a_B3\\projet_Angular\\SN_Projet_Terminer\\gestion_documents_C_sharp_mobile\\backend\\GestionDocuments.Tests\\GestionDocuments.Tests.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\joyce\\.nuget\\packages\\coverlet.collector\\6.0.2\\coverlet.collector.6.0.2.nupkg.sha512",
     "C:\\Users\\joyce\\.nuget\\packages\\microsoft.codecoverage\\17.12.0\\microsoft.codecoverage.17.12.0.nupkg.sha512",

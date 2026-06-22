@@ -229,7 +229,7 @@ npx ng build --watch --configuration=mobile
 ```
 
 ==
-voder le localStorage
+vider le localStorage
 localStorage.removeItem('gestion_docs_api_url');
 localStorage.removeItem('gestion_docs_api_custom_urls');
 location.reload();

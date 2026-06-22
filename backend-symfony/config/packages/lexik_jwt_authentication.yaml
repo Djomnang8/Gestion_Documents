@@ -1,0 +1,16 @@
+lexik_jwt_authentication:
+    secret_key: '%env(JWT_SECRET_KEY)%'
+    public_key: ~
+    pass_phrase: ~
+    token_ttl: '%env(int:JWT_TTL)%'
+    user_identity_field: email
+    encoder:
+        signature_algorithm: HS256
+    token_extractors:
+        authorization_header:
+            enabled: true
+            prefix: Bearer
+            name: Authorization
+        query_parameter:
+            enabled: true
+            name: token

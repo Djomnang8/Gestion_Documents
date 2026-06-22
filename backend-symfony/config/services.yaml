@@ -1,0 +1,31 @@
+parameters:
+    upload_dir: '%kernel.project_dir%/uploads'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\Controller\DossiersController:
+        arguments:
+            $uploadDir: '%upload_dir%'
+
+    App\Controller\FichiersController:
+        arguments:
+            $uploadDir: '%upload_dir%'
+
+    App\Service\EmailService:
+        arguments:
+            $fromAddress: '%env(MAIL_FROM_ADDRESS)%'
+            $fromName: '%env(MAIL_FROM_NAME)%'
+
+    App\EventListener\JwtCreatedListener:
+        tags:
+            - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_created, method: onJwtCreated }
